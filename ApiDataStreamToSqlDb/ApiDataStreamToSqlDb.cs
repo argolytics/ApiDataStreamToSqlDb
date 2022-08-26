@@ -1,37 +1,45 @@
-using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.Extensions.Logging;
-using ApiDataStreamToSqlDb.Services;
 using System.Net.Http;
+using Microsoft.AspNetCore.Http;
+using System;
+using System.Net.Http.Headers;
+using System.IO;
+using System.Text;
 
 namespace ApiDataStreamToSqlDb
 {
-    public static class ApiDataStreamToSqlDb
+    public class ApiDataStreamToSqlDb
     {
-        [FunctionName("ApiDataStreamToSqlDb")]
-        public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", Route = "https://opendata.maryland.gov/resource")] 
-            Stream stream,
-            IOpenDataPortalDatasetService openDataPortalDatasetService)
+        private readonly Uri baseUrl;
+        private readonly HttpClient client;
+        private readonly string apiKeyId;
+        private readonly string apiKeySecret;
+
+        public ApiDataStreamToSqlDb(HttpClient client)
         {
-            if (stream is null)
-            {
-                return new OkObjectResult("Stream is null"); // Todo: better exception handling
-            }
+            baseUrl = new Uri("https://opendata.maryland.gov/");
+            apiKeyId = "9yyt9inh3wdm4hov1bgdmqwav";
+            apiKeySecret = "30byco91x8t1be3hehmsxvoq18kdpkv0ud4hnuz7101odkxedi";
+            this.client = client;
+        }
 
-            HttpClient httpClient = new();
-
-            await httpClient.GetStreamAsync("/9xq5-z8s2.json?account_id_mdp_field_acctid=0603043312");
-            return new OkObjectResult("Stream retreived.");
-
-            // For when the service bus queue is set up:
-            //stream = await httpClient.GetStreamAsync("/9xq5-z8s2.json?account_id_mdp_field_acctid=0603043312");
-            //var openDataPortalPropertyModel = await openDataPortalDatasetService.TransformAndMapData(stream);
-            //await openDataPortalDatasetService.CreatePropertyAsync(openDataPortalPropertyModel);
-            //return new OkObjectResult("Listing created in database.");
+        [FunctionName("ApiDataStreamToSqlDb")]
+        public async Task<IActionResult> Run(
+            [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Get), Route = null)] 
+            HttpRequest request)
+        {
+            client.BaseAddress = baseUrl;
+            string authHeader = apiKeyId + ":" + apiKeySecret;
+            client.DefaultRequestHeaders.Authorization = 
+                new AuthenticationHeaderValue(
+                    "Authorization", "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(authHeader)));
+            
+            Stream stream = 
+                await client.GetStreamAsync("resource/ed4q-f8tm.json?account_id_mdp_field_acctid=0603043312");
+            return new OkObjectResult(stream);
         }
     }
 }
